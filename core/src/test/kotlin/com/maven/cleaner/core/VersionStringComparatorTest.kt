@@ -35,11 +35,9 @@ class VersionStringComparatorTest {
     }
 
     @Test
-    fun testSnapshotSortsAfterRelease() {
-        // "1.0-SNAPSHOT" splits to ["1","0","SNAPSHOT"] (3 parts)
-        // "1.0" splits to ["1","0"] (2 parts)
-        // After matching numeric segments, more parts = higher
-        assertTrue(comparator.compare("1.0-SNAPSHOT", "1.0") > 0)
+    fun testSnapshotSortsBeforeRelease() {
+        // In Maven ordering, SNAPSHOT is a pre-release qualifier and sorts before the release
+        assertTrue(comparator.compare("1.0-SNAPSHOT", "1.0") < 0)
     }
 
     @ParameterizedTest
@@ -49,12 +47,6 @@ class VersionStringComparatorTest {
     )
     fun testSnapshotOrderingAmongSnapshots(lower: String, higher: String) {
         assertTrue(comparator.compare(lower, higher) < 0)
-    }
-
-    @Test
-    fun testQualifiersAlphabetical() {
-        assertTrue(comparator.compare("1.0-alpha", "1.0-beta") < 0)
-        assertTrue(comparator.compare("1.0-beta", "1.0-rc1") < 0)
     }
 
     @Test
@@ -94,8 +86,27 @@ class VersionStringComparatorTest {
     }
 
     @Test
+    fun testQualifierOrdering() {
+        // Maven qualifier order: alpha < beta < milestone < rc < snapshot < "" (release) < sp
+        assertTrue(comparator.compare("1.0-alpha", "1.0-beta") < 0)
+        assertTrue(comparator.compare("1.0-beta", "1.0-milestone") < 0)
+        assertTrue(comparator.compare("1.0-milestone", "1.0-rc") < 0)
+        assertTrue(comparator.compare("1.0-rc", "1.0-SNAPSHOT") < 0)
+        assertTrue(comparator.compare("1.0-SNAPSHOT", "1.0") < 0)
+        assertTrue(comparator.compare("1.0", "1.0-sp") < 0)
+    }
+
+    @Test
+    fun testQualifierShortForms() {
+        assertEquals(0, comparator.compare("1.0-alpha", "1.0-a"))
+        assertEquals(0, comparator.compare("1.0-beta", "1.0-b"))
+        assertEquals(0, comparator.compare("1.0-milestone", "1.0-m"))
+        assertEquals(0, comparator.compare("1.0-rc", "1.0-cr"))
+    }
+
+    @Test
     fun testSymmetry() {
-        val pairs = listOf("1.0" to "2.0", "1.0-SNAPSHOT" to "1.0", "3.1" to "3.2")
+        val pairs = listOf("1.0" to "2.0", "1.0" to "1.0-SNAPSHOT", "3.1" to "3.2")
         for ((a, b) in pairs) {
             val ab = comparator.compare(a, b)
             val ba = comparator.compare(b, a)
@@ -108,6 +119,6 @@ class VersionStringComparatorTest {
     fun testSortingAListOfVersions() {
         val versions = listOf("3.0", "1.0", "2.1", "1.1", "2.0", "1.0-SNAPSHOT")
         val sorted = versions.sortedWith(comparator)
-        assertEquals(listOf("1.0", "1.0-SNAPSHOT", "1.1", "2.0", "2.1", "3.0"), sorted)
+        assertEquals(listOf("1.0-SNAPSHOT", "1.0", "1.1", "2.0", "2.1", "3.0"), sorted)
     }
 }

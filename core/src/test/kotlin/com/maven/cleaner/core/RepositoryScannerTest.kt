@@ -1,5 +1,6 @@
 package com.maven.cleaner.core
 
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -23,14 +24,14 @@ class RepositoryScannerTest {
     @Test
     fun testScanEmptyRepository() {
         val scanner = RepositoryScanner(tempDir)
-        val artifacts = scanner.scan()
+        val artifacts = runBlocking { scanner.scan() }
         assertTrue(artifacts.isEmpty())
     }
 
     @Test
     fun testScanNonExistentPath() {
         val scanner = RepositoryScanner(tempDir.resolve("does-not-exist"))
-        val artifacts = scanner.scan()
+        val artifacts = runBlocking { scanner.scan() }
         assertTrue(artifacts.isEmpty())
     }
 
@@ -38,7 +39,7 @@ class RepositoryScannerTest {
     fun testScanSingleArtifactSingleVersion() {
         createPom(tempDir, "com/example", "mylib", "1.0")
         val scanner = RepositoryScanner(tempDir)
-        val artifacts = scanner.scan()
+        val artifacts = runBlocking { scanner.scan() }
 
         assertEquals(1, artifacts.size)
         val art = artifacts[0]
@@ -55,7 +56,7 @@ class RepositoryScannerTest {
         createPom(tempDir, "com/example", "mylib", "2.0")
 
         val scanner = RepositoryScanner(tempDir)
-        val artifacts = scanner.scan()
+        val artifacts = runBlocking { scanner.scan() }
 
         assertEquals(1, artifacts.size)
         val versions = artifacts[0].versions.map { it.version }.sorted()
@@ -68,7 +69,7 @@ class RepositoryScannerTest {
         createPom(tempDir, "org/other", "lib-b", "2.0")
 
         val scanner = RepositoryScanner(tempDir)
-        val artifacts = scanner.scan()
+        val artifacts = runBlocking { scanner.scan() }
 
         assertEquals(2, artifacts.size)
         val groupIds = artifacts.map { it.groupId }.toSet()
@@ -81,7 +82,7 @@ class RepositoryScannerTest {
         createPom(tempDir, "org/apache/commons", "commons-lang3", "3.12.0")
 
         val scanner = RepositoryScanner(tempDir)
-        val artifacts = scanner.scan()
+        val artifacts = runBlocking { scanner.scan() }
 
         assertEquals(1, artifacts.size)
         assertEquals("org.apache.commons", artifacts[0].groupId)
@@ -93,7 +94,7 @@ class RepositoryScannerTest {
         createPom(tempDir, "com/example", "mylib", "1.0-SNAPSHOT")
 
         val scanner = RepositoryScanner(tempDir)
-        val artifacts = scanner.scan()
+        val artifacts = runBlocking { scanner.scan() }
 
         assertEquals(1, artifacts.size)
         assertTrue(artifacts[0].versions[0].isSnapshot)
@@ -104,7 +105,7 @@ class RepositoryScannerTest {
         createPom(tempDir, "com/example", "mylib", "1.0")
 
         val scanner = RepositoryScanner(tempDir)
-        val artifacts = scanner.scan()
+        val artifacts = runBlocking { scanner.scan() }
 
         assertFalse(artifacts[0].versions[0].isSnapshot)
     }
@@ -115,7 +116,7 @@ class RepositoryScannerTest {
         dir.resolve("mylib-1.0.jar").createFile()
 
         val scanner = RepositoryScanner(tempDir)
-        val artifacts = scanner.scan()
+        val artifacts = runBlocking { scanner.scan() }
 
         assertTrue(artifacts.isEmpty())
     }
@@ -127,7 +128,7 @@ class RepositoryScannerTest {
         jarFile.writeText("x".repeat(1000))
 
         val scanner = RepositoryScanner(tempDir)
-        val artifacts = scanner.scan()
+        val artifacts = runBlocking { scanner.scan() }
 
         // Size includes both the .pom file and the .jar file
         val expectedMinSize = 1000L + "pom-content".length
@@ -151,7 +152,7 @@ class RepositoryScannerTest {
         createPom(tempDir, "com/example", "mylib", "1.0")
 
         val scanner = RepositoryScanner(tempDir)
-        val artifacts = scanner.scan()
+        val artifacts = runBlocking { scanner.scan() }
 
         assertEquals(1, artifacts.size)
     }

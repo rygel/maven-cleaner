@@ -23,20 +23,20 @@ class RepositoryScanner(private val repositoryPath: Path = defaultRepositoryPath
         }
     }
 
-    fun scan(): List<Artifact> = runBlocking {
+    suspend fun scan(): List<Artifact> {
         if (!repositoryPath.exists() || !repositoryPath.isDirectory()) {
             logger.warn("Repository path does not exist or is not a directory: {}", repositoryPath)
-            return@runBlocking emptyList<Artifact>()
+            return emptyList()
         }
 
         val artifactMap = mutableMapOf<Pair<String, String>, MutableList<ArtifactVersion>>()
-        
+
         // Use a coroutine scope with multiple threads for fast I/O
         withContext(Dispatchers.IO) {
             scanDirectoryRecursive(repositoryPath, artifactMap)
         }
 
-        artifactMap.map { (key, versions) ->
+        return artifactMap.map { (key, versions) ->
             Artifact(key.first, key.second, versions)
         }
     }
@@ -64,7 +64,16 @@ class RepositoryScanner(private val repositoryPath: Path = defaultRepositoryPath
             val relativePath = repositoryPath.relativize(artifactPath.parent).toString()
             val groupId = relativePath.replace(java.io.File.separatorChar, '.')
 
-            val size = calculateDirectorySize(currentPath)
+            // Calculate size from already-listed entries to avoid a separate Files.walk()
+            val size = entries.sumOf { entry ->
+                if (entry.isRegularFile()) {
+                    try { Files.size(entry) } catch (_: Exception) { 0L }
+                } else if (entry.isDirectory()) {
+                    calculateDirectorySize(entry)
+                } else {
+                    0L
+                }
+            }
             val artifactVersion = ArtifactVersion(version, currentPath, size)
 
             artifactMapLock.withLock {

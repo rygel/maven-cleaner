@@ -57,14 +57,9 @@ class FormatUtilsTest {
 
     @Test
     fun testMaxLongDoesNotCrash() {
-        // Long.MAX_VALUE is ~8 EB which exceeds the units array.
-        // This may throw or return a wrong unit — just verify it doesn't crash the JVM.
-        try {
-            val result = formatSize(Long.MAX_VALUE)
-            assertNotNull(result)
-        } catch (_: ArrayIndexOutOfBoundsException) {
-            // Known limitation: the units array only goes to TB
-        }
+        val result = formatSize(Long.MAX_VALUE)
+        assertNotNull(result)
+        assertTrue(result.endsWith("EB"), "Long.MAX_VALUE (~8 EB) should use EB unit, got: $result")
     }
 
     @ParameterizedTest
