@@ -23,7 +23,7 @@ jobs:
             executable: cli/target/maven-cleaner.exe
             archive_name: maven-cleaner-windows-amd64.zip
             archive_cmd: zip
-          - os: macos-13
+          - os: macos-15-intel
             artifact: maven-cleaner-macos-amd64
             executable: cli/target/maven-cleaner
             archive_name: maven-cleaner-macos-amd64.tar.gz
