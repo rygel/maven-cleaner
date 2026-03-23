@@ -1,0 +1,50 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions: {}
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@ff0a06e83cb2de871e5a09832bc6a81e7276db98 # v3.28.18
+        with:
+          languages: java-kotlin
+          build-mode: manual
+
+      - name: Build
+        run: mvn compile -q -T 4
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@ff0a06e83cb2de871e5a09832bc6a81e7276db98 # v3.28.18
+        with:
+          category: '/language:java-kotlin'

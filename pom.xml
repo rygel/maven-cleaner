@@ -48,6 +48,7 @@
         <detekt.version>1.23.8</detekt.version>
         <versions.maven.plugin.version>2.21.0</versions.maven.plugin.version>
         <jna.version>5.18.1</jna.version>
+        <native.maven.plugin.version>0.10.6</native.maven.plugin.version>
     </properties>
 
     <dependencyManagement>
@@ -189,7 +190,7 @@
                                         <version>[3.9.0,)</version>
                                     </requireMavenVersion>
                                     <requireJavaVersion>
-                                        <version>[21,22)</version>
+                                        <version>[21,)</version>
                                     </requireJavaVersion>
                                 </rules>
                             </configuration>

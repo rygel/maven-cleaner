@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  native-images:
+    name: Build Native Image (${{ matrix.os }})
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: maven-cleaner-linux
+            executable: cli/target/maven-cleaner
+          - os: windows-latest
+            artifact: maven-cleaner-windows
+            executable: cli/target/maven-cleaner.exe
+          - os: macos-latest
+            artifact: maven-cleaner-macos
+            executable: cli/target/maven-cleaner
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up GraalVM
+        uses: graalvm/setup-graalvm@01ed653ac833fe80569f1ef9f25585ba2811baab # v1.3.3
+        with:
+          java-version: '21'
+          distribution: 'graalvm'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: 'maven'
+
+      - name: Build native image
+        run: mvn package -pl core,cli -Pnative -DskipTests -T 4
+
+      - name: Upload native image as artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.executable }}
+          retention-days: 90
+
+      - name: Upload to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2.2.2
+        with:
+          files: ${{ matrix.executable }}
