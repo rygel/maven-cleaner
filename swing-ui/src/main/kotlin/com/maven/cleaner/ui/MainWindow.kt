@@ -50,7 +50,7 @@ class MainWindow : JFrame("Maven Cleaner") {
     private val upstreamChecker = UpstreamChecker()
 
     private val coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private val sizeCache = mutableMapOf<String, Long>()
+    private val sizeCache = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     // Buttons
     private val scanMavenButton = JButton("All Versions")
@@ -363,7 +363,7 @@ class MainWindow : JFrame("Maven Cleaner") {
 
         object : SwingWorker<List<Array<Any>>, Void>() {
             override fun doInBackground(): List<Array<Any>> {
-                val artifacts = scanner.scan()
+                val artifacts = kotlinx.coroutines.runBlocking { scanner.scan() }
                 val versionComparator = com.maven.cleaner.core.VersionComparator()
                 val data = mutableListOf<Array<Any>>()
 
@@ -448,13 +448,21 @@ class MainWindow : JFrame("Maven Cleaner") {
     }
 
     private fun loadTableData(data: List<Array<Any>>, source: String) {
-        tableModel.rowCount = 0
         showSelectedOnlyCheckBox.isSelected = false
         table.rowSorter = null
 
+        // Suppress per-row table change notifications during bulk load
+        val listeners = tableModel.tableModelListeners.toList()
+        listeners.forEach { tableModel.removeTableModelListener(it) }
+
+        tableModel.rowCount = 0
         for (row in data) {
             tableModel.addRow(row)
         }
+
+        // Restore listeners and fire a single structural change event
+        listeners.forEach { tableModel.addTableModelListener(it) }
+        tableModel.fireTableDataChanged()
 
         table.autoCreateRowSorter = true
         statusLabel.text = "Found ${data.size} items ($source)."

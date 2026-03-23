@@ -21,6 +21,11 @@ enum class UpstreamStatus {
 open class UpstreamChecker : AutoCloseable {
     private val logger = LoggerFactory.getLogger(UpstreamChecker::class.java)
 
+    companion object {
+        // Matches "numFound" : <digits> in Solr JSON, extracting the count
+        private val NUM_FOUND_PATTERN = Regex(""""numFound"\s*:\s*(\d+)""")
+    }
+
     private val client = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(5))
         .build()
@@ -51,9 +56,7 @@ open class UpstreamChecker : AutoCloseable {
             when (response.statusCode()) {
                 200 -> {
                     val body = response.body()
-                    // Match "numFound":0 with possible whitespace around the colon and value
-                    val notFound = Regex(""""numFound"\s*:\s*0\b""").containsMatchIn(body)
-                    val status = if (notFound) UpstreamStatus.LOCAL_ONLY else UpstreamStatus.AVAILABLE
+                    val status = parseNumFound(body)
                     cache[cacheKey] = status
                     return@withContext status
                 }
@@ -70,6 +73,16 @@ open class UpstreamChecker : AutoCloseable {
             logger.warn("Failed to check upstream for {}: {}", cacheKey, e.message)
             return@withContext UpstreamStatus.UNKNOWN
         }
+    }
+
+    /**
+     * Extracts the numFound value from Solr JSON response.
+     * Handles the response format: {"response":{"numFound":N,...}}
+     */
+    internal fun parseNumFound(body: String): UpstreamStatus {
+        val match = NUM_FOUND_PATTERN.find(body) ?: return UpstreamStatus.UNKNOWN
+        val count = match.groupValues[1].toLongOrNull() ?: return UpstreamStatus.UNKNOWN
+        return if (count > 0) UpstreamStatus.AVAILABLE else UpstreamStatus.LOCAL_ONLY
     }
 
     override fun close() {

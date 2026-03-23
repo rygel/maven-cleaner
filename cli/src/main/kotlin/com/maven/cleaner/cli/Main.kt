@@ -17,6 +17,11 @@ import com.maven.cleaner.core.formatSize
 import kotlin.io.path.*
 
 fun main(args: Array<String>) {
+    // Ensure clean shutdown on Ctrl+C
+    Runtime.getRuntime().addShutdownHook(Thread {
+        System.err.println("\nInterrupted. Shutting down...")
+    })
+
     if (args.contains("--migrate-split")) {
         runMigrateSplit(args)
         return
@@ -63,7 +68,7 @@ private fun runMigrateSplit(args: Array<String>) {
 
         println("Scanning repository at $repoPath...")
         val scanner = RepositoryScanner(repoPath)
-        val artifactCount = scanner.scan().size
+        val artifactCount = runBlocking { scanner.scan() }.size
         println("Found $artifactCount artifacts. Each will be checked against Maven Central.")
 
         if (!dryRun) {
@@ -112,7 +117,7 @@ private fun runCleanup(args: Array<String>) {
     }
     val scanner = if (repoPathArg != null) RepositoryScanner(repoPathArg) else RepositoryScanner()
     println("Scanning repository: ${scanner.getRepositoryPath()}...")
-    val artifacts = scanner.scan()
+    val artifacts = runBlocking { scanner.scan() }
     println("Found ${artifacts.size} unique artifacts.")
 
     val allowedRoots = mutableListOf(RepositoryScanner.defaultRepositoryPath(), Paths.get(System.getProperty("user.home"), ".gradle"))
