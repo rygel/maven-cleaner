@@ -6,7 +6,6 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Instant
 import java.time.temporal.ChronoUnit
-import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.locks.ReentrantLock
 import kotlinx.coroutines.*
 import kotlin.concurrent.withLock
@@ -43,9 +42,18 @@ class RepositoryScanner(private val repositoryPath: Path = defaultRepositoryPath
     }
 
     private suspend fun scanDirectoryRecursive(currentPath: Path, artifactMap: MutableMap<Pair<String, String>, MutableList<ArtifactVersion>>): Unit = coroutineScope {
-        val entries = try { currentPath.listDirectoryEntries() } catch (e: Exception) { 
+        // Reject symlinks that could escape the repository
+        if (currentPath.isSymbolicLink()) {
+            val target = currentPath.toRealPath()
+            if (!target.startsWith(repositoryPath.toAbsolutePath().normalize())) {
+                logger.warn("Skipping symlink that points outside repository: {} -> {}", currentPath, target)
+                return@coroutineScope
+            }
+        }
+
+        val entries = try { currentPath.listDirectoryEntries() } catch (e: Exception) {
             logger.error("Failed to list entries in {}: {}", currentPath, e.message)
-            emptyList() 
+            emptyList()
         }
         val hasPom = entries.any { it.name.endsWith(".pom") }
 

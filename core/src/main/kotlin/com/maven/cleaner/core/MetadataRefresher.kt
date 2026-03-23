@@ -64,7 +64,10 @@ class MetadataRefresher {
     private fun updateMetadataFile(file: Path, actualVersions: Set<String>) {
         try {
             val dbf = DocumentBuilderFactory.newInstance()
-            dbf.isNamespaceAware = true // Set namespace aware
+            dbf.isNamespaceAware = true
+            dbf.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+            dbf.setFeature("http://xml.org/sax/features/external-general-entities", false)
+            dbf.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
             val db = dbf.newDocumentBuilder()
             val doc = db.parse(file.toFile())
 
@@ -99,7 +102,7 @@ class MetadataRefresher {
 
             // Update latest and release
             // Assuming the actualVersions/versionsFound are already somewhat ordered or we just take the "highest"
-            val sortedVersions = versionsFound.sortedWith(VersionComparatorForMetadata())
+            val sortedVersions = versionsFound.sortedWith(VersionStringComparator())
             val latestVersion = sortedVersions.last()
 
             updateOrAddElement(versioning, "latest", latestVersion)
@@ -143,26 +146,25 @@ class MetadataRefresher {
 
     private fun saveDocument(doc: Document, file: Path) {
         val transformerFactory = TransformerFactory.newInstance()
+        transformerFactory.setAttribute(javax.xml.XMLConstants.ACCESS_EXTERNAL_DTD, "")
+        transformerFactory.setAttribute(javax.xml.XMLConstants.ACCESS_EXTERNAL_STYLESHEET, "")
         val transformer = transformerFactory.newTransformer()
         transformer.setOutputProperty(OutputKeys.INDENT, "yes")
         transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "2")
-        
+
         val source = DOMSource(doc)
         val result = StreamResult(file.toFile())
         transformer.transform(source, result)
     }
 
     private fun cleanupArtifactDirectory(path: Path) {
-        // Delete metadata and checksums
+        // Safety: only delete metadata files, never the directory itself.
+        // Deleting the parent directory is risky — if something upstream passed a wrong path,
+        // we'd delete an arbitrary directory. Maven will recreate metadata as needed.
         path.listDirectoryEntries().forEach { entry ->
             if (entry.name.contains("maven-metadata")) {
                 Files.deleteIfExists(entry)
             }
-        }
-        // If directory is empty (except maybe for some hidden files), we could delete it, 
-        // but let's be conservative and only delete if it's truly empty of relevant files.
-        if (path.listDirectoryEntries().isEmpty()) {
-            Files.deleteIfExists(path)
         }
     }
 
@@ -181,25 +183,3 @@ class MetadataRefresher {
     }
 }
 
-class VersionComparatorForMetadata : Comparator<String> {
-    override fun compare(v1: String, v2: String): Int {
-        val parts1 = v1.split(".", "-", "_").filter { it.isNotEmpty() }
-        val parts2 = v2.split(".", "-", "_").filter { it.isNotEmpty() }
-        
-        val minLen = minOf(parts1.size, parts2.size)
-        for (i in 0 until minLen) {
-            val p1 = parts1[i]
-            val p2 = parts2[i]
-            
-            val n1 = p1.toIntOrNull()
-            val n2 = p2.toIntOrNull()
-            
-            if (n1 != null && n2 != null) {
-                if (n1 != n2) return n1.compareTo(n2)
-            } else {
-                if (p1 != p2) return p1.compareTo(p2)
-            }
-        }
-        return parts1.size.compareTo(parts2.size)
-    }
-}

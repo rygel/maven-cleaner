@@ -1,62 +1,117 @@
-# Maven Repository Cleaner (Kotlin)
+# Maven Cleaner
 
-A modern, fast, and feature-rich clone of the M2 Repo Cleaner, rewritten in Kotlin 2 with JDK 21 support. This tool helps you manage your local Maven repository by identifying and removing old artifact versions, snapshots, and other temporary files like Gradle daemon logs.
+A tool to clean up your local Maven repository and Gradle caches. Scans for old artifact versions, checks Maven Central for upstream availability, protects local-only builds, and reclaims disk space safely.
+
+Built with Kotlin, JDK 21, and FlatLaf.
 
 ## Features
 
--   **Multi-Module Architecture**:
-    -   `core`: High-performance scanning and cleaning logic using Kotlin Coroutines.
-    -   `cli`: Command-line interface for headless operations.
-    -   `swing-ui`: Modern desktop interface with a responsive UI.
--   **Concurrent Scanning**: Utilizes asynchronous I/O and coroutines for extremely fast repository analysis.
--   **Intelligent Selection**:
-    -   **Alphabetical Sorting**: Automatically sorts artifacts by GroupId, ArtifactId, and Version for easier navigation.
-    -   **Latest Version Highlighting**: Rows containing the latest version of an artifact are highlighted with a distinct background color.
-    -   **Select Snapshots**: Quick batch selection of all snapshot versions.
-    -   **Select Old Versions**: Automatically identifies and selects all versions except the latest for each artifact.
-    -   **Exclude Snapshots**: Deselects all snapshot versions from the current selection.
--   **Upstream Verification**: Checks artifacts against Maven Central to identify "Local Only" dependencies.
--   **Local-Only Protection**: A core safety feature that ensures any dependency not found in upstream Maven repositories is NEVER deleted, protecting your custom or internal builds. Use the "Protect Local Only" button in the UI or let the tool handle it automatically during deletion.
--   **Dry Run**: Dedicated button to simulate deletions, showing exactly what would be removed and how much space would be freed without modifying any files.
--   **Move to Trash**: Optional support for moving files to the system recycle bin/trash instead of permanent deletion (platform-dependent).
--   **Repository Integrity**: Automatically updates or removes `maven-metadata.xml` files after deletion to keep your local repository consistent with disk contents.
--   **Filtering & Review**: "Show Selected Only" mode allows for easy review of items marked for deletion.
--   **Modern Look**: Swing UI enhanced with **FlatLaf** and a **responsive JToolBar** for a native and clean appearance.
--   **Comprehensive Stats**: Displays total repository size, total size of selected items, and remaining space.
+### Maven Repository Cleaning
+- **Scan all versions** or **snapshots only** across your entire `~/.m2/repository`
+- **Select Old Versions** — automatically identifies all versions except the latest per artifact
+- **Upstream Verification** — checks each artifact against Maven Central
+- **Local-Only Protection** — artifacts not found upstream are never deleted
+- **Metadata Refresh** — updates `maven-metadata.xml` after deletion to keep the repository consistent
+- **Latest Version Safety** — warns before deleting all versions of an artifact
+
+### Gradle Cache Cleaning
+- **Daemon logs** — old `.out.log` files (>7 days)
+- **Caches** — version caches, transform caches, build caches, module caches
+- **Distributions** — downloaded Gradle wrapper ZIPs
+- **Build scan data** and **native platform files**
+
+### Split Repository Migration
+Supports Maven 3.9+ split local repository layout. Migrates an existing flat repository into:
+- `~/.m2/repository/cached/` — downloaded dependencies (safe to delete anytime)
+- `~/.m2/repository/installed/` — locally built artifacts (protected)
+
+Detects current layout status: Classic, Partially Split, or Fully Split.
+
+### Safety
+- **Path validation** — refuses to operate on paths outside allowed roots
+- **Symlink protection** — rejects symlinks, validates every walked entry stays within bounds
+- **TOCTOU mitigation** — re-validates paths immediately before each destructive operation
+- **Trash verification** — confirms files are actually gone after Recycle Bin operations
+- **Bulk trash via JNA** — uses Windows `SHFileOperation` for efficient batch Recycle Bin moves
+- **XXE protection** — disabled on all XML parsers and transformers
+- **Cancel support** — all long-running operations can be cancelled mid-progress
+
+### UI
+- Grouped side panel with Scan, Selection, Upstream, Actions, Options, and Layout sections
+- Progress dialogs for all long-running operations (scans, upstream checks, deletion, migration)
+- Numeric size sorting (not alphabetical)
+- Latest version highlighting (green rows)
+- Dry Run mode
+- Move to Trash (on by default)
+- Help > About dialog
 
 ## Prerequisites
 
--   **JDK 21** or higher.
--   **Maven 3.9+**.
+- **JDK 21** or higher
+- **Maven 3.9+**
 
-## Getting Started
+## Quick Start
 
-### Build the Project
+### PowerShell
 
-Run the following command in the root directory:
+```powershell
+# GUI
+.\run-gui.ps1
 
-```bash
-mvn clean install
+# CLI — cleanup
+.\run-cli.ps1 -DryRun
+.\run-cli.ps1 -SkipUpstream
+
+# CLI — migrate to split layout
+.\run-cli.ps1 -MigrateSplit -DryRun
+.\run-cli.ps1 -MigrateSplit
 ```
 
-### Run the GUI
+### Maven
 
 ```bash
-mvn exec:java -Dexec.mainClass="com.maven.cleaner.ui.MainWindowKt" -pl swing-ui
+# Build
+mvn install -DskipTests
+
+# GUI
+mvn -pl swing-ui exec:java -Dexec.mainClass=com.maven.cleaner.ui.MainWindowKt
+
+# CLI
+mvn -pl cli exec:java -Dexec.mainClass=com.maven.cleaner.cli.MainKt -Dexec.args="--dry-run --skip-upstream"
+mvn -pl cli exec:java -Dexec.mainClass=com.maven.cleaner.cli.MainKt -Dexec.args="--migrate-split --dry-run"
 ```
 
-### Run the CLI
+### CLI Flags
 
-```bash
-mvn exec:java -Dexec.mainClass="com.maven.cleaner.cli.MainKt" -pl cli --args="--help"
-```
+| Flag | Description |
+|---|---|
+| `--dry-run` | Simulate without deleting/moving |
+| `--skip-upstream` | Skip Maven Central checks |
+| `--repo <path>` | Custom repository path |
+| `--migrate-split` | Migrate to split repository layout |
 
 ## Project Structure
 
--   `core/`: Contains the domain models and scanning/cleaning logic.
--   `cli/`: Command-line implementation.
--   `swing-ui/`: Swing-based desktop application.
+```
+maven-cleaner/
+  core/          Domain models, scanning, cleaning, migration logic
+  cli/           Command-line interface
+  swing-ui/      Swing desktop application (FlatLaf)
+```
+
+## Build Configuration
+
+The project enforces:
+- **Java 21** and **Maven 3.9+** via maven-enforcer-plugin
+- **Dependency convergence** and **explicit plugin versions**
+- **Surefire timeout** — 300s forked process, 120s per JUnit test
+- **Detekt** — Kotlin linter on verify phase
+- **JaCoCo** — code coverage
+- **Split local repository** — enabled in `.mvn/maven.config`
+- **4 threads** — parallel module builds
+
+Swing tests are skipped by default. Use `-Ptest-desktop` to run them in a container.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details (if applicable).
+Licensed under the [Apache License 2.0](LICENSE).

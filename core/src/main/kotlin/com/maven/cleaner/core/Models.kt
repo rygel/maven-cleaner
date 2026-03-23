@@ -12,6 +12,5 @@ data class ArtifactVersion(
     val version: String,
     val path: Path,
     val size: Long,
-    val isSnapshot: Boolean = version.endsWith("-SNAPSHOT"),
-    var isLocalOnly: Boolean? = null
+    val isSnapshot: Boolean = version.endsWith("-SNAPSHOT")
 )

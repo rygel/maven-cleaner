@@ -1,52 +1,154 @@
 package com.maven.cleaner.cli
 
 import com.maven.cleaner.core.ArtifactCleaner
+import com.maven.cleaner.core.ArtifactVersion
+import com.maven.cleaner.core.RepositoryMigrator
 import com.maven.cleaner.core.RepositoryScanner
 import com.maven.cleaner.core.UpstreamChecker
+import com.maven.cleaner.core.UpstreamStatus
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.nio.file.Files
+import java.nio.file.Paths
+import com.maven.cleaner.core.formatSize
 import kotlin.io.path.*
-import kotlin.math.ln
-import kotlin.math.pow
 
 fun main(args: Array<String>) {
+    if (args.contains("--migrate-split")) {
+        runMigrateSplit(args)
+        return
+    }
+
+    runCleanup(args)
+}
+
+private fun runMigrateSplit(args: Array<String>) {
+    println("Maven Repository Split Migration")
+    println("================================")
+    println()
+    println("This will reorganize your local Maven repository into the split layout:")
+    println("  ~/.m2/repository/cached/    <- downloaded dependencies (safe to delete)")
+    println("  ~/.m2/repository/installed/ <- your locally built artifacts (protected)")
+    println()
+
+    val repoPathArg = args.indexOf("--repo").let { idx ->
+        if (idx >= 0 && idx + 1 < args.size) Paths.get(args[idx + 1]) else null
+    }
+    val repoPath = repoPathArg ?: RepositoryScanner.defaultRepositoryPath()
+    val dryRun = args.contains("--dry-run")
+
+    UpstreamChecker().use { checker ->
+        val migrator = RepositoryMigrator(checker, repoPath)
+
+        when (migrator.detectSplitStatus()) {
+            RepositoryMigrator.SplitStatus.FULLY_SPLIT -> {
+                println("Repository is already fully split. No migration needed.")
+                return
+            }
+            RepositoryMigrator.SplitStatus.PARTIALLY_SPLIT -> {
+                println("Repository is partially split. Some artifacts are still at the top level.")
+                print("Continue migration for remaining artifacts? (y/N): ")
+                if (readLine()?.lowercase() != "y") {
+                    println("Aborted.")
+                    return
+                }
+            }
+            RepositoryMigrator.SplitStatus.NOT_SPLIT -> {
+                // proceed normally
+            }
+        }
+
+        println("Scanning repository at $repoPath...")
+        val scanner = RepositoryScanner(repoPath)
+        val artifactCount = scanner.scan().size
+        println("Found $artifactCount artifacts. Each will be checked against Maven Central.")
+
+        if (!dryRun) {
+            println()
+            print("Proceed with migration? (y/N): ")
+            if (readLine()?.lowercase() != "y") {
+                println("Aborted.")
+                return
+            }
+        }
+
+        println()
+        val result = runBlocking {
+            migrator.migrate(dryRun = dryRun) { current, total, artifact, target ->
+                val prefix = if (dryRun) "[DRY RUN] " else ""
+                println("${prefix}[$current/$total] $artifact -> $target")
+            }
+        }
+
+        println()
+        if (dryRun) {
+            println("=== Dry Run Results ===")
+        } else {
+            println("=== Migration Complete ===")
+        }
+        println("  Moved to cached/:    ${result.movedToCached}")
+        println("  Moved to installed/: ${result.movedToInstalled}")
+        println("  Skipped (unknown):   ${result.skipped}")
+        println("  Errors:              ${result.errors}")
+
+        if (!dryRun && result.movedToCached > 0) {
+            println()
+            println("To use the split layout going forward, add to your .mvn/maven.config or settings.xml:")
+            println("  -Daether.enhancedLocalRepository.split=true")
+            println("  -Daether.enhancedLocalRepository.splitRemoteRepository=true")
+        }
+    }
+}
+
+private fun runCleanup(args: Array<String>) {
     println("Maven Repository Cleaner (Kotlin, JDK 21)")
     println("----------------------------------------")
 
-    val scanner = RepositoryScanner()
-    println("Scanning repository: ${RepositoryScanner.defaultRepositoryPath()}...")
+    val repoPathArg = args.indexOf("--repo").let { idx ->
+        if (idx >= 0 && idx + 1 < args.size) Paths.get(args[idx + 1]) else null
+    }
+    val scanner = if (repoPathArg != null) RepositoryScanner(repoPathArg) else RepositoryScanner()
+    println("Scanning repository: ${scanner.getRepositoryPath()}...")
     val artifacts = scanner.scan()
     println("Found ${artifacts.size} unique artifacts.")
 
-    val cleaner = ArtifactCleaner()
-    val upstreamChecker = UpstreamChecker()
+    val allowedRoots = mutableListOf(RepositoryScanner.defaultRepositoryPath(), Paths.get(System.getProperty("user.home"), ".gradle"))
+    if (repoPathArg != null) {
+        allowedRoots.add(repoPathArg)
+    }
+    val cleaner = ArtifactCleaner(allowedRoots = allowedRoots)
     val dryRun = args.contains("--dry-run")
     val skipUpstream = args.contains("--skip-upstream")
 
-    val allOldVersions = artifacts.flatMap { cleaner.findOldVersions(it) }
-    val oldSnapshots = artifacts.flatMap { cleaner.findOldSnapshots(it) }
-    
-    // Filter out local-only if not skipping upstream check
+    val candidates = artifacts.flatMap { art ->
+        val old = cleaner.findOldVersions(art)
+        val snapshots = cleaner.findOldSnapshots(art)
+        (old + snapshots)
+    }.distinctBy { it.path }
+
     val (removableVersions, protectedVersions) = if (skipUpstream) {
-        (allOldVersions + oldSnapshots) to emptyList<com.maven.cleaner.core.ArtifactVersion>()
+        candidates to emptyList<ArtifactVersion>()
     } else {
         println("Checking upstream status for potential removals (this may take a while)...")
-        runBlocking {
-            val finalRemovable = mutableListOf<com.maven.cleaner.core.ArtifactVersion>()
-            val finalProtected = mutableListOf<com.maven.cleaner.core.ArtifactVersion>()
-            
-            artifacts.forEach { art ->
-                val versionsToCheck = cleaner.findOldVersions(art) + cleaner.findOldSnapshots(art)
-                versionsToCheck.forEach { v ->
-                    val exists = upstreamChecker.checkMavenCentral(art.groupId, art.artifactId, v.version)
-                    if (exists) {
-                        finalRemovable.add(v)
-                    } else {
-                        finalProtected.add(v)
+        UpstreamChecker().use { upstreamChecker ->
+            runBlocking {
+                val semaphore = Semaphore(10)
+                val results = candidates.map { v ->
+                    async {
+                        val art = artifacts.first { a -> a.versions.any { it.path == v.path } }
+                        semaphore.withPermit {
+                            v to upstreamChecker.checkMavenCentral(art.groupId, art.artifactId, v.version)
+                        }
                     }
-                }
+                }.awaitAll()
+
+                val removable = results.filter { it.second == UpstreamStatus.AVAILABLE }.map { it.first }
+                val protected_ = results.filter { it.second == UpstreamStatus.LOCAL_ONLY }.map { it.first }
+                removable to protected_
             }
-            finalRemovable.toList() to finalProtected.toList()
         }
     }
 
@@ -62,7 +164,7 @@ fun main(args: Array<String>) {
     val totalSize = removableVersions.sumOf { it.size }
     val gradleLogs = scanner.scanGradleLogs()
     val gradleLogsSize = gradleLogs.sumOf { Files.size(it) }
-    
+
     val totalSizeToFree = totalSize + gradleLogsSize
     println("Total space to free: ${formatSize(totalSizeToFree)}")
 
@@ -90,11 +192,4 @@ fun main(args: Array<String>) {
     } else {
         println("Cleanup cancelled.")
     }
-}
-
-fun formatSize(size: Long): String {
-    if (size <= 0) return "0 B"
-    val units = arrayOf("B", "kB", "MB", "GB", "TB")
-    val digitGroups = (ln(size.toDouble()) / ln(1024.0)).toInt()
-    return String.format("%.2f %s", size / 1024.0.pow(digitGroups.toDouble()), units[digitGroups])
 }
