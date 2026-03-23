@@ -14,24 +14,24 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact: maven-cleaner-linux-amd64
+            artifact: maven-cleaner-native-linux-amd64
             executable: cli/target/maven-cleaner
-            archive_name: maven-cleaner-linux-amd64.tar.gz
+            archive_name: maven-cleaner-native-linux-amd64.tar.gz
             archive_cmd: tar -czf
           - os: windows-latest
-            artifact: maven-cleaner-windows-amd64
+            artifact: maven-cleaner-native-windows-amd64
             executable: cli/target/maven-cleaner.exe
-            archive_name: maven-cleaner-windows-amd64.zip
+            archive_name: maven-cleaner-native-windows-amd64.zip
             archive_cmd: zip
           - os: macos-15-intel
-            artifact: maven-cleaner-macos-amd64
+            artifact: maven-cleaner-native-macos-amd64
             executable: cli/target/maven-cleaner
-            archive_name: maven-cleaner-macos-amd64.tar.gz
+            archive_name: maven-cleaner-native-macos-amd64.tar.gz
             archive_cmd: tar -czf
           - os: macos-latest
-            artifact: maven-cleaner-macos-arm64
+            artifact: maven-cleaner-native-macos-arm64
             executable: cli/target/maven-cleaner
-            archive_name: maven-cleaner-macos-arm64.tar.gz
+            archive_name: maven-cleaner-native-macos-arm64.tar.gz
             archive_cmd: tar -czf
     runs-on: ${{ matrix.os }}
     permissions:
@@ -149,7 +149,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: maven-cleaner-universal-jar
+          name: maven-cleaner-fatjar-universal
           path: |
             staging/maven-cleaner.jar
             staging/maven-cleaner.jar.sha256
