@@ -14,26 +14,37 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact: maven-cleaner-linux
+            artifact: maven-cleaner-native-linux-amd64
             executable: cli/target/maven-cleaner
+            archive_name: maven-cleaner-native-linux-amd64.tar.gz
+            archive_cmd: tar -czf
           - os: windows-latest
-            artifact: maven-cleaner-windows
+            artifact: maven-cleaner-native-windows-amd64
             executable: cli/target/maven-cleaner.exe
-          - os: macos-latest
-            artifact: maven-cleaner-macos
+            archive_name: maven-cleaner-native-windows-amd64.zip
+            archive_cmd: zip
+          - os: macos-15-intel
+            artifact: maven-cleaner-native-macos-amd64
             executable: cli/target/maven-cleaner
+            archive_name: maven-cleaner-native-macos-amd64.tar.gz
+            archive_cmd: tar -czf
+          - os: macos-latest
+            artifact: maven-cleaner-native-macos-arm64
+            executable: cli/target/maven-cleaner
+            archive_name: maven-cleaner-native-macos-arm64.tar.gz
+            archive_cmd: tar -czf
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
       - name: Set up GraalVM
-        uses: graalvm/setup-graalvm@01ed653ac833fe80569f1ef9f25585ba2811baab # v1.3.3
+        uses: graalvm/setup-graalvm@f744c72a42b1995d7b0cbc314bde4bace7ac1fe1 # v1.5.0
         with:
           java-version: '21'
           distribution: 'graalvm'
@@ -43,15 +54,115 @@ jobs:
       - name: Build native image
         run: mvn package -pl core,cli -Pnative -DskipTests -T 4
 
-      - name: Upload native image as artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - name: Smoke test (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          chmod +x ${{ matrix.executable }}
+          ./${{ matrix.executable }} --dry-run --skip-upstream || true
+
+      - name: Smoke test (Windows)
+        if: runner.os == 'Windows'
+        run: .\cli\target\maven-cleaner.exe --dry-run --skip-upstream
+        shell: pwsh
+        continue-on-error: true
+
+      - name: Package binary (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p staging
+          cp ${{ matrix.executable }} staging/maven-cleaner
+          chmod +x staging/maven-cleaner
+          tar -czf ${{ matrix.archive_name }} -C staging maven-cleaner
+          sha256sum ${{ matrix.archive_name }} > ${{ matrix.archive_name }}.sha256
+
+      - name: Package binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path staging
+          Copy-Item ${{ matrix.executable }} staging/maven-cleaner.exe
+          Compress-Archive -Path staging/maven-cleaner.exe -DestinationPath ${{ matrix.archive_name }}
+          $hash = (Get-FileHash ${{ matrix.archive_name }} -Algorithm SHA256).Hash.ToLower()
+          "$hash  ${{ matrix.archive_name }}" | Out-File -Encoding ascii ${{ matrix.archive_name }}.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: ${{ matrix.artifact }}
-          path: ${{ matrix.executable }}
+          path: |
+            ${{ matrix.archive_name }}
+            ${{ matrix.archive_name }}.sha256
           retention-days: 90
 
       - name: Upload to release
         if: github.event_name == 'release'
-        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2.2.2
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
         with:
-          files: ${{ matrix.executable }}
+          files: |
+            ${{ matrix.archive_name }}
+            ${{ matrix.archive_name }}.sha256
+
+  fat-jar:
+    name: Build Universal JAR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Build fat JAR
+        run: mvn package -pl core,cli -Pshade -DskipTests -T 4
+
+      - name: Package fat JAR and launchers
+        run: |
+          mkdir -p staging
+          cp cli/target/cli-*.jar staging/maven-cleaner.jar
+
+          # Unix self-executing JAR (prepend shell stub)
+          cat > staging/maven-cleaner <<'STUB'
+          #!/bin/sh
+          exec java -jar "$0" "$@"
+          STUB
+          cat staging/maven-cleaner.jar >> staging/maven-cleaner
+          chmod +x staging/maven-cleaner
+
+          # Windows batch launcher
+          cat > staging/maven-cleaner.bat <<'BAT'
+          @echo off
+          java -jar "%~dp0maven-cleaner.jar" %*
+          BAT
+
+          cd staging
+          sha256sum maven-cleaner.jar > maven-cleaner.jar.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: maven-cleaner-fatjar-universal
+          path: |
+            staging/maven-cleaner.jar
+            staging/maven-cleaner.jar.sha256
+            staging/maven-cleaner
+            staging/maven-cleaner.bat
+          retention-days: 90
+
+      - name: Upload to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
+        with:
+          files: |
+            staging/maven-cleaner.jar
+            staging/maven-cleaner.jar.sha256
+            staging/maven-cleaner
+            staging/maven-cleaner.bat

@@ -136,9 +136,10 @@ class ArtifactCleanerTest {
         val cleaner = cleanerForTesting()
         val old = cleaner.findOldSnapshots(art)
         val names = old.map { it.version }.toSet()
-        // Latest version per comparator: "2.0-SNAPSHOT" sorts after "2.0" (more segments),
-        // so 2.0-SNAPSHOT is the latest. 1.1-SNAPSHOT is a snapshot that's not latest.
+        // Latest version is "2.0" (release sorts after 2.0-SNAPSHOT in Maven ordering).
+        // Both 1.1-SNAPSHOT and 2.0-SNAPSHOT are old snapshots.
         assertTrue(names.contains("1.1-SNAPSHOT"))
+        assertTrue(names.contains("2.0-SNAPSHOT"))
     }
 
     // --- Path validation tests ---

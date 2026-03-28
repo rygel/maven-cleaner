@@ -18,10 +18,10 @@ data class GradleCleanable(
     val size: Long
 )
 
-class GradleScanner {
+class GradleScanner(gradleHome: Path? = null) {
 
     private val logger = LoggerFactory.getLogger(GradleScanner::class.java)
-    private val gradleHome: Path = Paths.get(System.getProperty("user.home"), ".gradle")
+    private val gradleHome: Path = gradleHome ?: Paths.get(System.getProperty("user.home"), ".gradle")
 
     fun getGradleHome(): Path = gradleHome
 
