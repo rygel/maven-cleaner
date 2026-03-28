@@ -142,6 +142,7 @@
                             <buildArgs>
                                 <buildArg>--no-fallback</buildArg>
                                 <buildArg>-H:+ReportExceptionStackTraces</buildArg>
+                                <buildArg>--initialize-at-run-time=org.xml.sax.helpers.LocatorImpl</buildArg>
                             </buildArgs>
                         </configuration>
                     </plugin>
