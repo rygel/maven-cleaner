@@ -142,6 +142,7 @@
                             <buildArgs>
                                 <buildArg>--no-fallback</buildArg>
                                 <buildArg>-H:+ReportExceptionStackTraces</buildArg>
+                                <buildArg>--initialize-at-build-time=org.xml.sax.helpers</buildArg>
                             </buildArgs>
                         </configuration>
                     </plugin>
