@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-03-28
+
 ### Added
 - **Gradle Cache Cleaning** — scan and delete daemon logs, version caches, transform caches, build caches, module caches, wrapper distributions, build scan data, and native files
 - **Split Repository Migration** — migrate flat `~/.m2/repository` to Maven 3.9+ split layout (`cached/` + `installed/`) by checking each artifact against Maven Central
