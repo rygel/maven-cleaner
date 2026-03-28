@@ -8,6 +8,7 @@ import java.net.http.HttpResponse
 import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
@@ -26,8 +27,11 @@ open class UpstreamChecker : AutoCloseable {
         private val NUM_FOUND_PATTERN = Regex(""""numFound"\s*:\s*(\d+)""")
     }
 
+    private val executor = Executors.newCachedThreadPool()
+
     private val client = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(5))
+        .executor(executor)
         .build()
 
     private val cache = ConcurrentHashMap<String, UpstreamStatus>()
@@ -86,12 +90,6 @@ open class UpstreamChecker : AutoCloseable {
     }
 
     override fun close() {
-        // HttpClient doesn't have a close method prior to Java 21; on 21+ it does
-        // We attempt to close if available
-        try {
-            client.close()
-        } catch (_: Exception) {
-            // ignore
-        }
+        executor.shutdown()
     }
 }
