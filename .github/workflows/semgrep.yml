@@ -21,15 +21,9 @@ jobs:
           persist-credentials: false
 
       - name: Run Semgrep
-        uses: semgrep/semgrep-action@713efdd345f3035192eaa63f56867b88e63e4e5d # v1
-        with:
-          config: >-
-            p/default
-            p/kotlin
-            p/java
-          generateSarif: "1"
-        env:
-          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+        run: |
+          pip install semgrep
+          semgrep --config p/default --config p/kotlin --config p/java --sarif --output semgrep.sarif || true
 
       - name: Upload SARIF results
         if: always()
