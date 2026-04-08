@@ -3,13 +3,15 @@ name: Semgrep
 on:
   push:
     branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
 
 permissions: {}
 
 jobs:
   semgrep:
     name: Semgrep SAST
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       security-events: write
@@ -22,7 +24,7 @@ jobs:
 
       - name: Run Semgrep
         run: |
-          pip install semgrep
+          pip install semgrep==1.157.0
           semgrep --config p/default --config p/kotlin --config p/java --sarif --output semgrep.sarif || true
 
       - name: Upload SARIF results
