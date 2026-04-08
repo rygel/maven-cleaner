@@ -13,12 +13,12 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             artifact: maven-cleaner-native-linux-amd64
             executable: cli/target/maven-cleaner
             archive_name: maven-cleaner-native-linux-amd64.tar.gz
             archive_cmd: tar -czf
-          - os: windows-latest
+          - os: windows-2025
             artifact: maven-cleaner-native-windows-amd64
             executable: cli/target/maven-cleaner.exe
             archive_name: maven-cleaner-native-windows-amd64.zip
@@ -28,7 +28,7 @@ jobs:
             executable: cli/target/maven-cleaner
             archive_name: maven-cleaner-native-macos-amd64.tar.gz
             archive_cmd: tar -czf
-          - os: macos-latest
+          - os: macos-15
             artifact: maven-cleaner-native-macos-arm64
             executable: cli/target/maven-cleaner
             archive_name: maven-cleaner-native-macos-arm64.tar.gz
@@ -51,7 +51,8 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build native image
-        run: mvn package -pl core,cli -Pnative -DskipTests -T 4
+        shell: bash
+        run: ./mvnw package -pl core,cli -Pnative -DskipTests -T 4
 
       - name: Smoke test (Unix)
         if: runner.os != 'Windows'
@@ -102,7 +103,7 @@ jobs:
 
   fat-jar:
     name: Build Universal JAR
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
 
@@ -115,11 +116,11 @@ jobs:
       - name: Set up JDK 21
         uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
-          java-version: '21'
+          java-version: '21.0.9'
           distribution: 'temurin'
 
       - name: Build fat JAR
-        run: mvn package -pl core,cli -Pshade -DskipTests -T 4
+        run: ./mvnw package -pl core,cli -Pshade -DskipTests -T 4
 
       - name: Package fat JAR and launchers
         run: |
