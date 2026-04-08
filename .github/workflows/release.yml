@@ -97,7 +97,8 @@ jobs:
         if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ github.ref_name }}" "${{ matrix.archive_name }}" "${{ matrix.archive_name }}.sha256"
+          REF_NAME: ${{ github.ref_name }}
+        run: gh release upload "$REF_NAME" "${{ matrix.archive_name }}" "${{ matrix.archive_name }}.sha256"
 
   fat-jar:
     name: Build Universal JAR
@@ -157,4 +158,5 @@ jobs:
         if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ github.ref_name }}" staging/maven-cleaner.jar staging/maven-cleaner.jar.sha256 staging/maven-cleaner staging/maven-cleaner.bat
+          REF_NAME: ${{ github.ref_name }}
+        run: gh release upload "$REF_NAME" staging/maven-cleaner.jar staging/maven-cleaner.jar.sha256 staging/maven-cleaner staging/maven-cleaner.bat
