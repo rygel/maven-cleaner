@@ -48,7 +48,7 @@
         <detekt.version>1.23.8</detekt.version>
         <versions.maven.plugin.version>2.21.0</versions.maven.plugin.version>
         <jna.version>5.18.1</jna.version>
-        <native.maven.plugin.version>0.11.5</native.maven.plugin.version>
+        <native.maven.plugin.version>1.0.0</native.maven.plugin.version>
         <maven.shade.plugin.version>3.6.2</maven.shade.plugin.version>
         <jetbrains.annotations.version>26.1.0</jetbrains.annotations.version>
     </properties>
