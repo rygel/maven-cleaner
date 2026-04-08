@@ -18,21 +18,29 @@ jobs:
             executable: cli/target/maven-cleaner
             archive_name: maven-cleaner-native-linux-amd64.tar.gz
             archive_cmd: tar -czf
+            graalvm-version: '25.0.2'
+            native-plugin-version: '1.0.0'
           - os: windows-2025
             artifact: maven-cleaner-native-windows-amd64
             executable: cli/target/maven-cleaner.exe
             archive_name: maven-cleaner-native-windows-amd64.zip
             archive_cmd: zip
+            graalvm-version: '25.0.2'
+            native-plugin-version: '1.0.0'
           - os: macos-15-intel
             artifact: maven-cleaner-native-macos-amd64
             executable: cli/target/maven-cleaner
             archive_name: maven-cleaner-native-macos-amd64.tar.gz
             archive_cmd: tar -czf
+            graalvm-version: '25.0.1'   # 25.0.2 has no macOS x64 build
+            native-plugin-version: '0.11.5'  # 1.0.0 requires GraalVM >= 25.0.2
           - os: macos-15
             artifact: maven-cleaner-native-macos-arm64
             executable: cli/target/maven-cleaner
             archive_name: maven-cleaner-native-macos-arm64.tar.gz
             archive_cmd: tar -czf
+            graalvm-version: '25.0.2'
+            native-plugin-version: '1.0.0'
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
@@ -46,13 +54,13 @@ jobs:
       - name: Set up GraalVM
         uses: graalvm/setup-graalvm@60c26726de13f8b90771df4bc1641a52a3159994 # v1.5.2
         with:
-          java-version: '25.0.2'
+          java-version: ${{ matrix.graalvm-version }}
           distribution: 'graalvm'
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build native image
         shell: bash
-        run: ./mvnw package -pl core,cli -Pnative -DskipTests -T 4
+        run: ./mvnw package -pl core,cli -Pnative -DskipTests -T 4 -Dnative.maven.plugin.version=${{ matrix.native-plugin-version }}
 
       - name: Smoke test (Unix)
         if: runner.os != 'Windows'
